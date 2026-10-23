@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <meta name="theme-color" content="#0b0b0b" />
     <title>ShareRoom — Your room. Your people.</title>
-    <link rel="stylesheet" href="/static/style.css?v=neon1" />
+    <link rel="stylesheet" href="/static/style.css?v=invite2" />
   </head>
   <body>
     <header>
@@ -119,8 +119,37 @@
           <span><b id="users">0</b> online</span
           ><span><b id="latency">—</b> latency</span
           ><span><b id="expiry">—</b> left</span
-          ><button id="copy" class="yellow-button">Copy invite ↗</button>
+          ><button id="copy" class="yellow-button">Copy invite link ↗</button>
         </div>
+        <section class="join-details" aria-label="Manual join details">
+          <div>
+            <label for="share-code">Room code</label>
+            <div class="copy-field">
+              <input id="share-code" readonly spellcheck="false" /><button
+                id="copy-code"
+                class="yellow-button"
+                type="button"
+              >
+                Copy code
+              </button>
+            </div>
+          </div>
+          <div>
+            <label for="share-key">Access key</label>
+            <div class="copy-field">
+              <input id="share-key" readonly spellcheck="false" /><button
+                id="copy-key"
+                class="outline"
+                type="button"
+              >
+                Copy key
+              </button>
+            </div>
+          </div>
+          <p class="muted">
+            Joining manually? Share both the room code and access key.
+          </p>
+        </section>
         <div id="invite-fallback" hidden>
           <label for="invite">Copy this private invite link</label
           ><input id="invite" readonly />
@@ -181,6 +210,6 @@
         >Temporary rooms. <span class="yellow">Real connections.</span></span
       >
     </footer>
-    <script src="/static/app.js?v=neon1"></script>
+    <script src="/static/app.js?v=invite2"></script>
   </body>
 </html>

@@ -157,6 +157,8 @@ async function enter(code, secret) {
   $("landing").hidden = true;
   $("room").hidden = false;
   $("code").textContent = room;
+  $("share-code").value = room;
+  $("share-key").value = key;
   $("room-title").textContent = data.name || "Your room";
   $("status").textContent = "Connecting…";
   $("users").textContent = "0";
@@ -289,6 +291,9 @@ $("leave").onclick = () => {
   stop();
   room = "";
   key = "";
+  $("share-code").value = "";
+  $("share-key").value = "";
+  $("invite").value = "";
   history.replaceState(null, "", location.pathname);
   $("room").hidden = true;
   $("landing").hidden = false;
@@ -296,17 +301,21 @@ $("leave").onclick = () => {
   $("files").replaceChildren();
   $("create-tab").focus();
 };
-$("copy").onclick = async () => {
+async function copyValue(id, label) {
+  const input = $(id);
   try {
-    await navigator.clipboard.writeText($("invite").value);
-    toast("Invite copied");
+    await navigator.clipboard.writeText(input.value);
+    toast(label + " copied");
   } catch {
-    $("invite-fallback").hidden = false;
-    $("invite").focus();
-    $("invite").select();
-    toast("Press Ctrl+C or copy the selected invite link.");
+    if (id === "invite") $("invite-fallback").hidden = false;
+    input.focus();
+    input.select();
+    toast("Select and copy the highlighted " + label.toLowerCase() + ".");
   }
-};
+}
+$("copy").onclick = () => copyValue("invite", "Invite link");
+$("copy-code").onclick = () => copyValue("share-code", "Room code");
+$("copy-key").onclick = () => copyValue("share-key", "Access key");
 $("sendform").onsubmit = (event) => {
   event.preventDefault();
   const value = $("message").value;
