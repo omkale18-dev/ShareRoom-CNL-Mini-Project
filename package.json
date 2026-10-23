@@ -1,0 +1,15 @@
+{
+  "name": "shareroom-ui-tests",
+  "private": true,
+  "scripts": {
+    "test": "node --test tests/ui.test.cjs",
+    "format": "prettier --write static/*.{html,css,js}"
+  },
+  "devDependencies": {
+    "jsdom": "30.1.3",
+    "prettier": "3.9.10"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}

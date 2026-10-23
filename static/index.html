@@ -1,39 +1,186 @@
-<!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#f7f3ed"><title>ShareRoom — A space to share</title>
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static/style.css?v=terracotta1"></head>
-<body>
-<div class="shell">
-<aside class="sidebar">
-<a class="logo" href="/"><span class="logo-mark">⬡</span><span>Share<span class="logo-accent">Room</span><small>CHAT · SHARE · COLLABORATE</small></span></a>
-<div class="nav-caption">WORKSPACE</div>
-<nav class="nav">
-<a href="/" class="nav-item active"><span>⌂</span> Home</a>
-<a href="#create-space" class="nav-item" id="nav-create"><span>▣</span> Create room</a>
-<a href="#join-space" class="nav-item" id="nav-join"><span>↪</span> Join room</a>
-<a href="#room" class="nav-item" id="nav-room"><span>▤</span> Current room</a>
-<a href="/static/network.html" class="nav-item"><span>◈</span> AWS Monitor</a>
-</nav>
-<div class="sidebar-bottom"><div class="sidebar-tip"><span class="tip-icon">✳</span><strong>Fast. Simple. Private.</strong><p>Temporary rooms for focused collaboration. No account needed.</p></div><div class="sidebar-footer">SHAREROOM / CNL LAB</div></div>
-</aside>
-<div class="workspace">
-<header class="topbar"><div class="breadcrumb">WORKSPACE <span>/</span> <strong>OVERVIEW</strong></div><div class="top-actions"><span class="top-label"><span class="live-dot"></span> Ready to connect</span><a class="top-monitor" href="/static/network.html">Network monitor ↗</a></div></header>
-<main>
-<section id="landing">
-<div class="hero"><div class="hero-copy"><div class="eyebrow light-eyebrow">✦ &nbsp; YOUR SPACE TO CONNECT</div><h1>Create spaces<br>that bring <em>people<br>together.</em></h1><p>Chat in real time, exchange files, and get things done — together, in one simple room.</p><div class="hero-actions"><button id="create">＋ &nbsp; Create a room <span>↗</span></button><a class="hero-secondary" href="#join-space">Join a room →</a></div></div><div class="hero-art" aria-hidden="true"><div class="sun"></div><div class="orb orb-one"></div><div class="orb orb-two"></div><div class="glass-room"><div class="room-roof"></div><div class="window-glow"></div><div class="art-plant">✳</div><div class="art-title">Ideas grow<br>better together.</div></div><div class="art-hill"></div></div><div class="hero-tag"><span>✦</span> Your room. Your rules.</div></div>
-<div class="features"><article class="feature"><span class="feature-icon peach">☏</span><h3>Real-time chat</h3><p>Messages appear instantly with WebSockets.</p></article><article class="feature"><span class="feature-icon mint">▤</span><h3>File sharing</h3><p>Share documents and files up to 25 MB.</p></article><article class="feature"><span class="feature-icon lilac">♧</span><h3>Easy collaboration</h3><p>Share an invite link and work together.</p></article><article class="feature"><span class="feature-icon amber">♙</span><h3>Temporary & private</h3><p>Rooms use access keys and expire automatically.</p></article></div>
-<div class="landing-bottom">
-<section class="panel" id="join-space"><div class="panel-top"><div><span class="overline">GET CONNECTED</span><h2>Join an existing room</h2></div><span class="decorative-arrow">↗</span></div><p class="muted">Enter the room code and key shared with you, or open an invite link.</p><div class="join-fields"><label>ROOM CODE<input id="joincode" maxlength="6" placeholder="ABC123" autocomplete="off"></label><label>ACCESS KEY<input id="joinkey" placeholder="Paste your room key" autocomplete="off"></label></div><button id="join" class="secondary-btn">Join room <span>→</span></button></section>
-<section class="panel how-panel"><div class="panel-top"><div><span class="overline">HOW IT WORKS</span><h2>Three steps. That's it.</h2></div></div><div class="steps"><div><b>01</b><span>Create a temporary room</span></div><div><b>02</b><span>Share the private invite link</span></div><div><b>03</b><span>Chat and transfer files live</span></div></div><a href="/static/network.html" class="inline-link">Explore AWS network monitoring ↗</a></section>
-</div>
-</section>
-<section id="room" hidden><div class="roomtop"><div><div class="eyebrow">● LIVE COLLABORATION</div><h1>Room <em id="code"></em></h1><p id="status">Connecting…</p></div><button id="leave" class="outline">Leave room ↗</button></div>
-<div class="stats"><div><small>Connected devices</small><strong id="users">0</strong></div><div><small>WebSocket latency</small><strong id="latency">—</strong></div><div><small>Room expires in</small><strong id="expiry">—</strong></div></div>
-<div class="invite"><div><small>PRIVATE INVITE LINK</small><input id="invite" readonly aria-label="Invite link"></div><button id="copy">Copy invite ↗</button></div>
-<div class="columns"><article class="room-card"><div class="room-card-head"><span class="feature-icon peach">☏</span><div><h2>Live conversation</h2><p class="muted">Messages are shared with everyone in this room.</p></div></div><div id="messages" class="messages"></div><form id="sendform"><textarea id="message" maxlength="10000" placeholder="Write a message or paste a link…" required></textarea><button>Send message →</button></form></article><article class="room-card"><div class="room-card-head"><span class="feature-icon mint">▤</span><div><h2>Shared files</h2><p class="muted">Up to 25 MB per file · SHA-256 verification</p></div></div><form id="uploadform"><label class="drop">↑ &nbsp; Choose a file to share<input id="file" type="file" required></label><button>Upload file →</button></form><div id="uploadstatus" class="muted"></div><div id="files"></div></article></div>
-</section>
-<div id="toast" role="status"></div>
-</main><footer>© ShareRoom · Computer Networks Laboratory <span>Built with FastAPI · WebSockets · AWS</span></footer></div>
-</div><script src="/static/app.js"></script></body></html>
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="theme-color" content="#0b0b0b" />
+    <title>ShareRoom — Your room. Your people.</title>
+    <link rel="stylesheet" href="/static/style.css?v=neon1" />
+  </head>
+  <body>
+    <header>
+      <a class="brand" href="/" aria-label="ShareRoom home"
+        ><span class="brand-mark" aria-hidden="true"></span>ShareRoom</a
+      ><a class="monitor-link" href="/static/network.html">Network ↗</a>
+    </header>
+    <main>
+      <section id="landing" class="landing">
+        <div class="hero">
+          <span class="eyebrow">01 / CONNECT</span>
+          <h1>YOUR ROOM.<br /><em>YOUR PEOPLE.</em></h1>
+          <p>Chat. Drop files. <span>Stay in sync.</span></p>
+          <div class="room-art" aria-hidden="true">
+            <span></span><span></span>
+          </div>
+        </div>
+        <section class="entry-panel" aria-label="Connect to a room">
+          <div class="tabs" role="tablist" aria-label="Room action">
+            <button
+              id="create-tab"
+              role="tab"
+              aria-selected="true"
+              aria-controls="create-panel"
+            >
+              Create room</button
+            ><button
+              id="join-tab"
+              role="tab"
+              aria-selected="false"
+              aria-controls="join-panel"
+              tabindex="-1"
+            >
+              Join room
+            </button>
+          </div>
+          <div id="create-panel" role="tabpanel" aria-labelledby="create-tab">
+            <h2>Make space<span class="yellow">.</span></h2>
+            <form id="createform">
+              <label for="create-name">Your name</label
+              ><input
+                id="create-name"
+                maxlength="40"
+                autocomplete="nickname"
+                placeholder="Enter your name"
+                required
+              /><label for="room-name">Room name</label
+              ><input
+                id="room-name"
+                maxlength="60"
+                placeholder="e.g. Design team"
+                required
+              /><button id="create" class="primary" type="submit">
+                Create room <span aria-hidden="true">→</span>
+              </button>
+            </form>
+            <p class="footnote">Share the invite. Start talking.</p>
+          </div>
+          <div
+            id="join-panel"
+            role="tabpanel"
+            aria-labelledby="join-tab"
+            hidden
+          >
+            <h2>Come on in<span class="yellow">.</span></h2>
+            <form id="joinform">
+              <label for="join-name">Your name</label
+              ><input
+                id="join-name"
+                maxlength="40"
+                autocomplete="nickname"
+                placeholder="Enter your name"
+                required
+              /><label for="joincode">Room code</label
+              ><input
+                id="joincode"
+                maxlength="6"
+                pattern="[A-Za-z0-9]{6}"
+                placeholder="ABC123"
+                autocomplete="off"
+                required
+              /><label for="joinkey">Access key</label
+              ><input
+                id="joinkey"
+                placeholder="Paste your room key"
+                autocomplete="off"
+                required
+              /><button id="join" class="primary" type="submit">
+                Join room <span aria-hidden="true">→</span>
+              </button>
+            </form>
+          </div>
+          <p id="entry-error" class="error" role="alert" hidden></p>
+        </section>
+      </section>
+      <section id="room" hidden>
+        <div class="roomtop">
+          <div>
+            <span class="eyebrow"
+              >YOUR SHARED SPACE / <span id="code"></span
+            ></span>
+            <h1 id="room-title">Your room</h1>
+            <p id="status" role="status">Connecting…</p>
+          </div>
+          <div class="room-actions">
+            <button id="reconnect" class="outline" hidden>Reconnect</button
+            ><button id="leave" class="outline">Leave room ↗</button>
+          </div>
+        </div>
+        <div class="room-meta">
+          <span><b id="users">0</b> online</span
+          ><span><b id="latency">—</b> latency</span
+          ><span><b id="expiry">—</b> left</span
+          ><button id="copy" class="yellow-button">Copy invite ↗</button>
+        </div>
+        <div id="invite-fallback" hidden>
+          <label for="invite">Copy this private invite link</label
+          ><input id="invite" readonly />
+        </div>
+        <div class="columns">
+          <article class="conversation">
+            <div class="section-title">
+              <h2>Conversation</h2>
+              <span class="yellow">●</span>
+            </div>
+            <div
+              id="messages"
+              class="messages"
+              role="log"
+              aria-label="Room messages"
+              aria-live="polite"
+            ></div>
+            <form id="sendform" class="composer">
+              <label class="sr-only" for="message">Message</label
+              ><textarea
+                id="message"
+                maxlength="10000"
+                placeholder="Write a message…"
+                required
+                rows="2"
+              ></textarea
+              ><button
+                id="send"
+                class="primary"
+                aria-label="Send message"
+                disabled
+              >
+                Send ↗
+              </button>
+            </form>
+          </article>
+          <aside class="file-panel">
+            <div class="section-title">
+              <h2>Shared files</h2>
+              <span class="muted">25 MB max</span>
+            </div>
+            <div id="files"></div>
+            <form id="uploadform">
+              <label class="drop" for="file"
+                ><span class="yellow" aria-hidden="true">＋</span> Choose a
+                file<input id="file" type="file" required /></label
+              ><button id="upload" class="outline">Upload file ↑</button>
+            </form>
+            <p id="uploadstatus" class="muted" role="status"></p>
+          </aside>
+        </div>
+      </section>
+      <div id="toast" role="status" hidden></div>
+    </main>
+    <footer>
+      <span>ShareRoom</span
+      ><span
+        >Temporary rooms. <span class="yellow">Real connections.</span></span
+      >
+    </footer>
+    <script src="/static/app.js?v=neon1"></script>
+  </body>
+</html>
