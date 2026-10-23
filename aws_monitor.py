@@ -10,7 +10,7 @@ def _dimension(arn, resource):
     marker = ":" + resource + "/"
     if marker not in arn:
         raise ValueError("Invalid " + resource + " ARN")
-    return resource + "/" + arn.split(marker, 1)[1]
+    return arn.split(marker, 1)[1]
 
 
 def get_alb_metrics():
