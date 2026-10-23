@@ -172,3 +172,26 @@ def download(code: str, file_id: str, key: str):
     if not row or not (FILES / file_id).is_file():
         raise HTTPException(404, 'File not found')
     return FileResponse(FILES / file_id, filename=row['name'], media_type='application/octet-stream')
+
+
+# ALB demonstration endpoints. Counters are local to this process only.
+# They are not AWS CloudWatch metrics and reset on restart.
+INSTANCE_NAME = os.environ.get("INSTANCE_NAME", os.environ.get("HOSTNAME", "share-room-1"))[:64]
+STARTED_AT = time.time()
+probe_requests = 0
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+@app.get("/api/network/instance")
+def network_instance():
+    global probe_requests
+    probe_requests += 1
+    return {
+        "instance": INSTANCE_NAME,
+        "requests_seen_by_this_process": probe_requests,
+        "uptime_seconds": int(time.time() - STARTED_AT),
+        "timestamp": time.time(),
+        "note": "Application probe counts only; not ALB request totals"
+    }
