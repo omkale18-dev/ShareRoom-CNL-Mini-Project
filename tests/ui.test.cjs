@@ -260,3 +260,34 @@ test("network probes, reset, AWS unavailable and stale metrics", async () => {
     env.dom.window.close();
   }
 });
+
+test("manual join exposes code and key; copying works with and without clipboard", async () => {
+  const env = setup();
+  try {
+    await create(env);
+    assert.equal(env.$("share-code").value, "ABC123");
+    assert.equal(env.$("share-key").value, "secret");
+    for (const [button, field] of [
+      ["copy-code", "share-code"],
+      ["copy-key", "share-key"],
+    ]) {
+      env.$(button).click();
+      await flush();
+      assert.equal(env.w.document.activeElement, env.$(field));
+      assert.equal(env.$(field).selectionEnd, env.$(field).value.length);
+    }
+    const copied = [];
+    Object.defineProperty(env.w.navigator, "clipboard", {
+      value: { writeText: async (text) => copied.push(text) },
+    });
+    env.$("copy-code").click();
+    env.$("copy-key").click();
+    await flush();
+    assert.deepEqual(copied, ["ABC123", "secret"]);
+    env.$("leave").click();
+    assert.equal(env.$("share-key").value, "");
+    assert.equal(env.$("share-code").value, "");
+  } finally {
+    env.dom.window.close();
+  }
+});
