@@ -9,6 +9,7 @@ import sqlite3
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
+from pydantic import BaseModel, Field, field_validator
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -32,8 +33,16 @@ def connect_db():
 
 def initialize():
     with connect_db() as db:
+        # Serialize additive migrations when workers start together.
+        db.execute('BEGIN IMMEDIATE')
         db.execute('CREATE TABLE IF NOT EXISTS rooms (code TEXT PRIMARY KEY, secret TEXT NOT NULL, expires REAL NOT NULL)')
         db.execute('CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, room TEXT NOT NULL, text TEXT NOT NULL, created REAL NOT NULL)')
+        room_columns = {r['name'] for r in db.execute('PRAGMA table_info(rooms)')}
+        if 'name' not in room_columns:
+            db.execute("ALTER TABLE rooms ADD COLUMN name TEXT NOT NULL DEFAULT 'Your room'")
+        message_columns = {r['name'] for r in db.execute('PRAGMA table_info(messages)')}
+        if 'sender' not in message_columns:
+            db.execute("ALTER TABLE messages ADD COLUMN sender TEXT NOT NULL DEFAULT 'Guest'")
         db.execute('CREATE TABLE IF NOT EXISTS files (id TEXT PRIMARY KEY, room TEXT NOT NULL, name TEXT NOT NULL, size INTEGER NOT NULL, sha256 TEXT NOT NULL, created REAL NOT NULL)')
 
 def cleanup():
@@ -54,7 +63,7 @@ def require_room(code, secret):
         row = db.execute('SELECT * FROM rooms WHERE code = ?', (code,)).fetchone()
     if not row or row['expires'] <= time.time():
         raise HTTPException(404, 'Room expired or not found')
-    if not secrets.compare_digest(row['secret'], secret or ''):
+    if not (secret or '').isascii() or not secrets.compare_digest(row['secret'], secret or ''):
         raise HTTPException(403, 'Invalid room key')
     return row
 
@@ -71,8 +80,20 @@ app.mount('/static', StaticFiles(directory=BASE / 'static'), name='static')
 def index():
     return FileResponse(BASE / 'static' / 'index.html')
 
+class RoomInput(BaseModel):
+    name: str = Field(default='Your room', min_length=1, max_length=60)
+
+    @field_validator('name')
+    @classmethod
+    def strip_name(cls, value):
+        value = value.strip()
+        if not value:
+            raise ValueError('Room name cannot be blank')
+        return value
+
+
 @app.post('/api/rooms')
-def create_room():
+def create_room(payload: RoomInput | None = None):
     cleanup()
     alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
     with connect_db() as db:
@@ -80,7 +101,7 @@ def create_room():
             code = ''.join(secrets.choice(alphabet) for _ in range(6))
             secret = secrets.token_urlsafe(24)
             try:
-                db.execute('INSERT INTO rooms VALUES (?, ?, ?)', (code, secret, time.time() + TTL))
+                db.execute('INSERT INTO rooms(code, secret, expires, name) VALUES (?, ?, ?, ?)', (code, secret, time.time() + TTL, payload.name if payload else 'Your room'))
                 return {'code': code, 'key': secret, 'expires_in': TTL}
             except sqlite3.IntegrityError:
                 pass
@@ -90,9 +111,9 @@ def create_room():
 def get_room(code: str, key: str):
     row = require_room(code, key)
     with connect_db() as db:
-        messages = [dict(r) for r in db.execute('SELECT id, text, created FROM messages WHERE room = ? ORDER BY id DESC LIMIT 100', (code,))][::-1]
+        messages = [dict(r) for r in db.execute('SELECT id, text, created, sender FROM messages WHERE room = ? ORDER BY id DESC LIMIT 100', (code,))][::-1]
         files = [dict(r) for r in db.execute('SELECT id, name, size, sha256, created FROM files WHERE room = ? ORDER BY created DESC', (code,))]
-    return {'code': code, 'expires_at': row['expires'], 'messages': messages, 'files': files}
+    return {'code': code, 'name': row['name'], 'expires_at': row['expires'], 'messages': messages, 'files': files}
 
 async def broadcast(code, event):
     for ws in list(connections.get(code, set())):
@@ -116,6 +137,9 @@ async def socket(ws: WebSocket, code: str):
         while True:
             payload = await ws.receive_json()
             require_room(code, key)
+            if not isinstance(payload, dict):
+                await ws.send_json({'type': 'error', 'message': 'Invalid message format'})
+                continue
             kind = payload.get('type')
             if kind == 'ping':
                 await ws.send_json({'type': 'pong', 'sent': payload.get('sent')})
@@ -124,14 +148,22 @@ async def socket(ws: WebSocket, code: str):
                 if not isinstance(value, str) or not value.strip() or len(value) > MAX_MESSAGE:
                     await ws.send_json({'type': 'error', 'message': 'Message must be 1–10000 characters'})
                     continue
+                sender = payload.get('sender', 'Guest')
+                if not isinstance(sender, str) or not sender.strip() or len(sender) > 40:
+                    await ws.send_json({'type': 'error', 'message': 'Name must be 1–40 characters'})
+                    continue
                 now = time.time()
                 with connect_db() as db:
-                    cur = db.execute('INSERT INTO messages(room, text, created) VALUES (?, ?, ?)', (code, value, now))
+                    cur = db.execute('INSERT INTO messages(room, text, created, sender) VALUES (?, ?, ?, ?)', (code, value, now, sender.strip()))
                     msg_id = cur.lastrowid
-                await broadcast(code, {'type': 'message', 'id': msg_id, 'text': value, 'created': now})
+                await broadcast(code, {'type': 'message', 'id': msg_id, 'text': value, 'created': now, 'sender': sender.strip()})
     except (WebSocketDisconnect, HTTPException, ValueError, RuntimeError):
         pass
     finally:
+        try:
+            await ws.close()
+        except RuntimeError:
+            pass
         connections.get(code, set()).discard(ws)
         await broadcast(code, {'type': 'presence', 'count': len(connections.get(code, set()))})
 
