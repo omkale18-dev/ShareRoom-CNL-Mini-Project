@@ -42,3 +42,29 @@ $('run').onclick=async()=>{
 };
 $('reset').onclick=()=>{if(running)return;results.clear();$('latency').textContent='—';$('status').textContent='Results cleared';render();};
 render();
+
+async function refreshAwsMetrics(){
+ const button=$('aws-refresh');button.disabled=true;
+ $('aws-status').textContent='Loading AWS target health and CloudWatch metrics…';
+ try{
+  const res=await fetch('/api/network/aws-metrics',{cache:'no-store'});
+  if(!res.ok)throw new Error('HTTP '+res.status);
+  const data=await res.json();
+  if(!data.connected){
+   $('aws-status').textContent=data.error||'AWS metrics are not connected.';
+   $('aws-healthy').textContent='—';$('aws-requests').textContent='—';$('aws-latency').textContent='—';
+   $('aws-app-health').textContent='';$('aws-details').textContent='';
+   return;
+  }
+  const mon=data.targets.monitor,app=data.targets.application;
+  $('aws-status').textContent='Connected to AWS · '+data.region+' · CloudWatch data may lag several minutes.';
+  $('aws-healthy').textContent=mon.healthy+' / '+(mon.healthy+mon.unhealthy+mon.other);
+  $('aws-requests').textContent=Number(data.request_count).toLocaleString();
+  $('aws-latency').textContent=data.target_response_time_ms===null?'No data':data.target_response_time_ms+' ms';
+  $('aws-app-health').textContent='Application target group: '+app.healthy+' healthy, '+app.unhealthy+' unhealthy, '+app.other+' other.';
+  $('aws-details').textContent='Monitor targets: '+mon.details.map(t=>t.id+': '+t.state+(t.reason?' ('+t.reason+')':'')).join(' · ');
+ }catch(e){$('aws-status').textContent='AWS metrics request failed: '+e.message;}
+ finally{button.disabled=false;}
+}
+$('aws-refresh').onclick=refreshAwsMetrics;
+refreshAwsMetrics();
