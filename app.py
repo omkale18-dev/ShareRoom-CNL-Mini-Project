@@ -195,3 +195,9 @@ def network_instance():
         "timestamp": time.time(),
         "note": "Application probe counts only; not ALB request totals"
     }
+
+
+@app.get("/api/network/aws-metrics")
+def aws_metrics():
+    from aws_monitor import get_alb_metrics
+    return get_alb_metrics()

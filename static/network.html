@@ -29,7 +29,7 @@
 <button id="run">Run probe test →</button><button id="reset" class="outline">Clear results</button></div>
 <p id="status" role="status" class="monitor-status">Ready to test</p><div id="distribution" class="monitor-list"></div></section>
 <section class="monitor-card" style="margin-top:18px"><h2>AWS ALB health &amp; metrics</h2>
-<p class="monitor-note">ALB target health, CloudWatch RequestCount and TargetResponseTime are <strong>not connected</strong> to this dashboard. Check them in the AWS Console. The instance labels here are reported by FastAPI and do not prove that an ALB is configured.</p>
+<p class="monitor-note" id="aws-status">Checking AWS connection…</p><div class="monitor-grid"><div class="monitor-card"><small>Healthy targets (monitor)</small><strong id="aws-healthy">—</strong></div><div class="monitor-card"><small>Requests (last 60 min)</small><strong id="aws-requests">—</strong></div><div class="monitor-card"><small>Target response time</small><strong id="aws-latency">—</strong><small>Mean of 1-minute averages</small></div></div><p class="monitor-note" id="aws-app-health"></p><p class="monitor-note" id="aws-details"></p><button id="aws-refresh" class="outline" type="button">Refresh AWS metrics</button>
 <p class="monitor-note">For a meaningful load-balancing test, configure an ALB with at least two healthy targets and access ShareRoom using the ALB DNS name. Do not send real room/file traffic to multiple EC2 instances until room state, files, and WebSocket broadcasts are shared across instances.</p></section>
 </main><footer>ShareRoom · Computer Networks Laboratory · HTTP instance probes</footer>
 <script src="/static/network.js"></script></body></html>
