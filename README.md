@@ -6,7 +6,7 @@
 
 ## 1. Abstract
 
-ShareRoom is a browser-based platform for exchanging text, links, and files through temporary, access-controlled rooms. A user creates a room, then shares the room code and secret key with another user. Clients communicate with a Python FastAPI server using HTTP for room/file operations and WebSockets for real-time messages. The application can run locally or on an AWS EC2 virtual machine so users on different networks can connect through a common server.
+ShareRoom is a browser-based platform for exchanging text, links, and files through temporary, access-controlled rooms. A user creates a room, then shares the six-character room code with another user. Clients communicate with a Python FastAPI server using HTTP for room/file operations and WebSockets for real-time messages. The application can run locally or on an AWS EC2 virtual machine so users on different networks can connect through a common server.
 
 ## 2. Problem statement and objectives
 
@@ -21,8 +21,10 @@ Sharing short messages and files between devices often requires an account or an
 
 ## 3. Features implemented
 
-- Random six-character room code plus separate secret access key.
-- Shareable invite URL or manual room-code/key entry.
+- Random six-character invitation code; the backend supplies an internal token when joining.
+- Shareable invite URL or manual room-code entry; no access-key field.
+- Creation retries reuse a request ID, avoiding duplicate rooms after a lost response.
+- Anyone with a valid room code can join. Share codes only with intended participants.
 - Real-time text messaging using WebSockets, with recent message history.
 - Connected-client presence count and application-level ping/pong RTT.
 - HTTP file upload/download up to **25 MiB** per file.
@@ -202,6 +204,7 @@ Use a domain, HTTPS/TLS certificate and `wss://` WebSockets; add rate limiting, 
 | Endpoint | Purpose |
 |---|---|
 | `POST /api/rooms` | Create room and return code, key and expiry |
+| `POST /api/rooms/{code}/join` | Exchange a valid room code for its internal token |
 | `GET /api/rooms/{code}?key=...` | Retrieve authorized room data |
 | `POST /api/rooms/{code}/files` | Multipart upload with `key` and `file` |
 | `GET /api/rooms/{code}/files/{file_id}?key=...` | Authorized file download |
@@ -303,3 +306,23 @@ A: Compare the SHA-256 hash of the original and downloaded file; the server also
 ## 15. Conclusion
 
 ShareRoom demonstrates real client-server networking by combining HTTP file transfer, WebSocket messaging, TCP/IP addressing, cloud hosting, and measurable network behavior in one working application. The key CNL deliverables are the running system, protocol evidence, topology, reproducible tests and clear explanation of which networking functions are implemented by the application versus the operating system.
+
+
+## Deploying the room creation and joining fix
+
+Update the backend and static files together, then restart `shareroom.service`.
+The database migration adds a nullable request ID and unique index automatically;
+keep the existing `data` directory. Do not delete the database to apply this fix.
+The HTML now requests `app.js?v=roomfix2`. Hard-refresh existing browser tabs
+following deployment, especially if Nginx serves the static HTML directly.
+
+Keep exactly one healthy application target in `shareroom-app-tg` and run one
+Uvicorn worker. Route `/api/network/*` to `shareroom-monitor-tg`, which may contain
+both EC2 instances. All room API requests, uploads, downloads, and `/ws/*` must go
+to the same application instance. Per-client sticky sessions alone do not ensure
+that two different users reach the same room database. Multi-instance real rooms
+require shared storage and cross-process message delivery, not just this patch.
+
+Smoke test with two browsers: create a room, copy its code, join from the second
+browser, exchange messages and a file, reconnect, and verify the room code stays
+the same. Opening an old `#CODE.key` invite remains supported.

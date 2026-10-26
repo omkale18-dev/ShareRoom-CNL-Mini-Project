@@ -8,6 +8,7 @@ let room = "",
   busy = false,
   session = 0,
   displayName = "Guest",
+  pendingCreate = null,
   toastTimer;
 const toast = (message) => {
   clearTimeout(toastTimer);
@@ -142,14 +143,20 @@ function updateExpiry() {
     $("upload").disabled = true;
   }
 }
-async function enter(code, secret) {
+async function enter(code, secret = "") {
+  const attempt = session;
   const candidate = code.trim().toUpperCase();
   secret = secret.trim();
-  if (!/^[A-Z0-9]{6}$/.test(candidate) || !secret)
-    throw Error("Enter a six-character room code and its access key.");
+  if (!/^[A-Z0-9]{6}$/.test(candidate))
+    throw Error("Enter a six-character room code.");
+  if (!secret) {
+    const invite = await api(`/api/rooms/${candidate}/join`, { method: "POST" });
+    secret = invite.key;
+  }
   const data = await api(
     `/api/rooms/${encodeURIComponent(candidate)}?key=${encodeURIComponent(secret)}`,
   );
+  if (attempt !== session) return;
   stop();
   room = candidate;
   key = secret;
@@ -158,7 +165,6 @@ async function enter(code, secret) {
   $("room").hidden = false;
   $("code").textContent = room;
   $("share-code").value = room;
-  $("share-key").value = key;
   $("room-title").textContent = data.name || "Your room";
   $("status").textContent = "Connecting…";
   $("users").textContent = "0";
@@ -169,12 +175,12 @@ async function enter(code, secret) {
   $("upload").disabled = false;
   $("invite-fallback").hidden = true;
   $("invite").value =
-    `${location.origin}/#${encodeURIComponent(room)}.${encodeURIComponent(key)}`;
+    `${location.origin}/#${encodeURIComponent(room)}`;
   $("messages").replaceChildren();
   $("files").replaceChildren();
   data.messages.forEach(addMessage);
   data.files.forEach(addFile);
-  history.replaceState(null, "", `#${room}.${key}`);
+  history.replaceState(null, "", `#${room}`);
   connectSocket();
   ticker = setInterval(updateExpiry, 1000);
   updateExpiry();
@@ -214,6 +220,7 @@ function connectSocket() {
     } catch {
       return;
     }
+    if (!message || typeof message !== "object") return;
     if (message.type === "message") addMessage(message);
     if (message.type === "file") addFile(message);
     if (message.type === "presence") $("users").textContent = message.count;
@@ -224,7 +231,7 @@ function connectSocket() {
   };
 }
 async function withEntry(action) {
-  if (busy) return;
+  if (busy || room) return;
   busy = true;
   $("create").disabled = $("join").disabled = true;
   $("entry-error").hidden = true;
@@ -248,16 +255,20 @@ $("createform").onsubmit = (event) => {
     displayName = $("create-name").value.trim();
     const name = $("room-name").value.trim();
     if (!displayName || !name) throw Error("Enter your name and a room name.");
+    if (!pendingCreate || pendingCreate.name !== name) {
+      const bytes = new Uint8Array(24);
+      crypto.getRandomValues(bytes);
+      pendingCreate = { name, request_id: Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("") };
+    }
     const data = await api("/api/rooms", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name }),
+      body: JSON.stringify(pendingCreate),
     });
     // Keep a successfully created invite available if the follow-up request fails.
     $("joincode").value = data.code;
-    $("joinkey").value = data.key;
     $("join-name").value = displayName;
-    history.replaceState(null, "", `#${data.code}.${data.key}`);
+    history.replaceState(null, "", `#${data.code}`);
     try {
       await enter(data.code, data.key);
     } catch (error) {
@@ -271,7 +282,7 @@ $("joinform").onsubmit = (event) => {
   withEntry(async () => {
     displayName = $("join-name").value.trim();
     if (!displayName) throw Error("Enter your name.");
-    await enter($("joincode").value, $("joinkey").value);
+    await enter($("joincode").value);
   });
 };
 $("reconnect").onclick = async () => {
@@ -291,8 +302,8 @@ $("leave").onclick = () => {
   stop();
   room = "";
   key = "";
+  pendingCreate = null;
   $("share-code").value = "";
-  $("share-key").value = "";
   $("invite").value = "";
   history.replaceState(null, "", location.pathname);
   $("room").hidden = true;
@@ -315,7 +326,6 @@ async function copyValue(id, label) {
 }
 $("copy").onclick = () => copyValue("invite", "Invite link");
 $("copy-code").onclick = () => copyValue("share-code", "Room code");
-$("copy-key").onclick = () => copyValue("share-key", "Access key");
 $("sendform").onsubmit = (event) => {
   event.preventDefault();
   const value = $("message").value;
@@ -373,11 +383,13 @@ function readInvite() {
   if (room || busy) return;
   const raw = location.hash.slice(1);
   const split = raw.indexOf(".");
-  if (split < 1) return;
+  if (!raw) return;
   setTab("join");
   try {
-    $("joincode").value = decodeURIComponent(raw.slice(0, split));
-    $("joinkey").value = decodeURIComponent(raw.slice(split + 1));
+    const code = decodeURIComponent(split < 0 ? raw : raw.slice(0, split)).trim().toUpperCase();
+    if (!/^[A-Z0-9]{6}$/.test(code)) throw Error("Invalid invite");
+    if (split >= 0) decodeURIComponent(raw.slice(split + 1));
+    $("joincode").value = code;
     $("join-name").focus();
   } catch {
     $("entry-error").textContent =

@@ -1,10 +1,7 @@
-import asyncio
 import hashlib
-import json
 import os
 import re
 import secrets
-import shutil
 import sqlite3
 import time
 from contextlib import asynccontextmanager
@@ -40,6 +37,9 @@ def initialize():
         room_columns = {r['name'] for r in db.execute('PRAGMA table_info(rooms)')}
         if 'name' not in room_columns:
             db.execute("ALTER TABLE rooms ADD COLUMN name TEXT NOT NULL DEFAULT 'Your room'")
+        if 'request_id' not in room_columns:
+            db.execute('ALTER TABLE rooms ADD COLUMN request_id TEXT')
+        db.execute('CREATE UNIQUE INDEX IF NOT EXISTS rooms_request_id ON rooms(request_id)')
         message_columns = {r['name'] for r in db.execute('PRAGMA table_info(messages)')}
         if 'sender' not in message_columns:
             db.execute("ALTER TABLE messages ADD COLUMN sender TEXT NOT NULL DEFAULT 'Guest'")
@@ -56,13 +56,17 @@ def cleanup():
             db.execute('DELETE FROM messages WHERE room = ?', (code,))
             db.execute('DELETE FROM rooms WHERE code = ?', (code,))
 
-def require_room(code, secret):
+def find_room(code):
     if not ROOM_RE.fullmatch(code):
         raise HTTPException(404, 'Room not found')
     with connect_db() as db:
         row = db.execute('SELECT * FROM rooms WHERE code = ?', (code,)).fetchone()
     if not row or row['expires'] <= time.time():
         raise HTTPException(404, 'Room expired or not found')
+    return row
+
+def require_room(code, secret):
+    row = find_room(code)
     if not (secret or '').isascii() or not secrets.compare_digest(row['secret'], secret or ''):
         raise HTTPException(403, 'Invalid room key')
     return row
@@ -78,10 +82,11 @@ app.mount('/static', StaticFiles(directory=BASE / 'static'), name='static')
 
 @app.get('/')
 def index():
-    return FileResponse(BASE / 'static' / 'index.html')
+    return FileResponse(BASE / 'static' / 'index.html', headers={'Cache-Control': 'no-cache'})
 
 class RoomInput(BaseModel):
     name: str = Field(default='Your room', min_length=1, max_length=60)
+    request_id: str | None = Field(default=None, min_length=16, max_length=128, pattern=r'^[A-Za-z0-9_-]+$')
 
     @field_validator('name')
     @classmethod
@@ -96,16 +101,31 @@ class RoomInput(BaseModel):
 def create_room(payload: RoomInput | None = None):
     cleanup()
     alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+    request_id = payload.request_id if payload else None
     with connect_db() as db:
+        db.execute('BEGIN IMMEDIATE')
+        if request_id:
+            existing = db.execute('SELECT * FROM rooms WHERE request_id = ?', (request_id,)).fetchone()
+            if existing:
+                if existing['name'] != payload.name:
+                    raise HTTPException(409, 'Creation request already used for a different room')
+                return {'code': existing['code'], 'key': existing['secret'], 'expires_in': max(0, int(existing['expires'] - time.time()))}
         for _ in range(10):
             code = ''.join(secrets.choice(alphabet) for _ in range(6))
             secret = secrets.token_urlsafe(24)
             try:
-                db.execute('INSERT INTO rooms(code, secret, expires, name) VALUES (?, ?, ?, ?)', (code, secret, time.time() + TTL, payload.name if payload else 'Your room'))
+                db.execute('INSERT INTO rooms(code, secret, expires, name, request_id) VALUES (?, ?, ?, ?, ?)', (code, secret, time.time() + TTL, payload.name if payload else 'Your room', request_id))
                 return {'code': code, 'key': secret, 'expires_in': TTL}
-            except sqlite3.IntegrityError:
-                pass
+            except sqlite3.IntegrityError as error:
+                if 'rooms.code' not in str(error):
+                    raise
     raise HTTPException(503, 'Could not create room')
+
+@app.post('/api/rooms/{code}/join')
+def join_room(code: str):
+    # The room code is the invitation credential in the code-only flow.
+    row = find_room(code.strip().upper())
+    return {'code': row['code'], 'key': row['secret']}
 
 @app.get('/api/rooms/{code}')
 def get_room(code: str, key: str):
