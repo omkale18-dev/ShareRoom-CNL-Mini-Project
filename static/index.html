@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <meta name="theme-color" content="#0b0b0b" />
     <title>ShareRoom — Your room. Your people.</title>
-    <link rel="stylesheet" href="/static/style.css?v=invite2" />
+    <link rel="stylesheet" href="/static/style.css?v=codeonly1" />
   </head>
   <body>
     <header>
@@ -87,12 +87,6 @@
                 placeholder="ABC123"
                 autocomplete="off"
                 required
-              /><label for="joinkey">Access key</label
-              ><input
-                id="joinkey"
-                placeholder="Paste your room key"
-                autocomplete="off"
-                required
               /><button id="join" class="primary" type="submit">
                 Join room <span aria-hidden="true">→</span>
               </button>
@@ -134,21 +128,6 @@
               </button>
             </div>
           </div>
-          <div>
-            <label for="share-key">Access key</label>
-            <div class="copy-field">
-              <input id="share-key" readonly spellcheck="false" /><button
-                id="copy-key"
-                class="outline"
-                type="button"
-              >
-                Copy key
-              </button>
-            </div>
-          </div>
-          <p class="muted">
-            Joining manually? Share both the room code and access key.
-          </p>
         </section>
         <div id="invite-fallback" hidden>
           <label for="invite">Copy this private invite link</label
@@ -210,6 +189,6 @@
         >Temporary rooms. <span class="yellow">Real connections.</span></span
       >
     </footer>
-    <script src="/static/app.js?v=invite2"></script>
+    <script src="/static/app.js?v=codeonly1"></script>
   </body>
 </html>
