@@ -139,18 +139,16 @@ test("create failures reset controls; successful creation survives failed room f
     await create(env);
     assert.equal(env.$("join-panel").hidden, false);
     assert.equal(env.$("joincode").value, "ABC123");
-    assert.equal(env.$("joinkey").value, "secret");
-    assert.equal(env.w.location.hash, "#ABC123.secret");
+    assert.equal(env.w.location.hash, "#ABC123");
   } finally {
     env.dom.window.close();
   }
 });
 
 test("invite prefill, invalid invite, tab keyboard navigation and join errors", async () => {
-  const env = setup("index", "#ABC123.secret");
+  const env = setup("index", "#ABC123");
   try {
     assert.equal(env.$("join-panel").hidden, false);
-    assert.equal(env.$("joinkey").value, "secret");
     env
       .$("join-tab")
       .dispatchEvent(
@@ -169,7 +167,7 @@ test("invite prefill, invalid invite, tab keyboard navigation and join errors", 
     await flush();
     assert.equal(env.$("entry-error").textContent, "Invalid room key");
     assert.equal(env.$("room").hidden, true);
-    env.w.fetch = async () => response(state);
+    env.w.fetch = async (url) => response(url.endsWith("/join") ? {code: "ABC123", key: "secret"} : state);
     env
       .$("joinform")
       .dispatchEvent(new env.w.Event("submit", { cancelable: true }));
@@ -190,7 +188,7 @@ test("clipboard HTTP fallback, disconnect and reconnect", async () => {
     env.$("copy").click();
     await flush();
     assert.equal(env.$("invite-fallback").hidden, false);
-    assert.match(env.$("invite").value, /#ABC123.secret/);
+    assert.match(env.$("invite").value, /#ABC123/);
     env.Socket.instances[0].onclose();
     assert.equal(env.$("send").disabled, true);
     assert.equal(env.$("reconnect").hidden, false);
@@ -261,15 +259,14 @@ test("network probes, reset, AWS unavailable and stale metrics", async () => {
   }
 });
 
-test("manual join exposes code and key; copying works with and without clipboard", async () => {
+test("manual join exposes code; copying works with and without clipboard", async () => {
   const env = setup();
   try {
     await create(env);
     assert.equal(env.$("share-code").value, "ABC123");
-    assert.equal(env.$("share-key").value, "secret");
+    assert.equal(env.$("share-key"), null);
     for (const [button, field] of [
       ["copy-code", "share-code"],
-      ["copy-key", "share-key"],
     ]) {
       env.$(button).click();
       await flush();
@@ -281,13 +278,70 @@ test("manual join exposes code and key; copying works with and without clipboard
       value: { writeText: async (text) => copied.push(text) },
     });
     env.$("copy-code").click();
-    env.$("copy-key").click();
     await flush();
-    assert.deepEqual(copied, ["ABC123", "secret"]);
+    assert.deepEqual(copied, ["ABC123"]);
     env.$("leave").click();
-    assert.equal(env.$("share-key").value, "");
     assert.equal(env.$("share-code").value, "");
   } finally {
     env.dom.window.close();
   }
+});
+
+
+test("retry after a lost create response reuses request ID, leave starts a new room", async () => {
+  const env = setup();
+  try {
+    const requests = [];
+    let fail = true;
+    env.w.fetch = async (url, options = {}) => {
+      if (url === "/api/rooms") {
+        requests.push(JSON.parse(options.body));
+        if (fail) { fail = false; throw Error("Response lost"); }
+        return response({code: "ABC123", key: "secret"});
+      }
+      return response(state);
+    };
+    await create(env);
+    await create(env);
+    assert.equal(requests.length, 2);
+    assert.equal(requests[0].request_id, requests[1].request_id);
+    assert.equal(env.$("room").hidden, false);
+    await create(env); // Submitting a hidden form must not create another room.
+    assert.equal(requests.length, 2);
+    env.$("leave").click();
+    await create(env);
+    assert.notEqual(requests[2].request_id, requests[1].request_id);
+  } finally { env.dom.window.close(); }
+});
+
+test("code-only and legacy invites join without missing DOM fields", async () => {
+  for (const hash of ["#abc123", "#ABC123.secret"]) {
+    const env = setup("index", hash);
+    try {
+      assert.equal(env.$("joincode").value, "ABC123");
+      env.$("join-name").value = "Guest";
+      env.$("joinform").dispatchEvent(new env.w.Event("submit", {cancelable: true}));
+      await flush();
+      assert.equal(env.calls[0].url, "/api/rooms/ABC123/join");
+      assert.equal(env.calls[0].options.method, "POST");
+      assert.equal(env.$("room").hidden, false);
+      env.Socket.instances[0].receive(null);
+      assert.equal(env.$("entry-error").hidden, true);
+    } finally { env.dom.window.close(); }
+  }
+});
+
+test("leaving during reconnect prevents a late response reopening the room", async () => {
+  const env = setup();
+  try {
+    await create(env);
+    let resolve;
+    env.w.fetch = () => new Promise(r => { resolve = r; });
+    env.$("reconnect").click();
+    env.$("leave").click();
+    resolve(response(state));
+    await flush();
+    assert.equal(env.$("room").hidden, true);
+    assert.equal(env.w.location.hash, "");
+  } finally { env.dom.window.close(); }
 });

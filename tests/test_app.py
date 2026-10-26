@@ -135,3 +135,35 @@ def test_aws_metrics_dimensions_and_target_groups(monkeypatch):
     assert data['request_count'] == 5 and data['target_response_time_ms'] == 30
     assert data['targets']['application']['details'][0]['id'] == 'application-group'
     assert data['targets']['monitor']['details'][0]['id'] == 'monitor-group'
+
+
+def test_code_only_join_and_expired_missing_codes():
+    from app import connect_db
+    with TestClient(app) as client:
+        room = client.post('/api/rooms').json()
+        joined = client.post(f'/api/rooms/{room["code"].lower()}/join')
+        assert joined.status_code == 200
+        assert joined.json() == {'code': room['code'], 'key': room['key']}
+        with client.websocket_connect(f'/ws/{room["code"]}?key={joined.json()["key"]}') as ws:
+            assert ws.receive_json()['type'] == 'presence'
+        assert client.post('/api/rooms/invalid/join').status_code == 404
+        with connect_db() as db:
+            db.execute('UPDATE rooms SET expires=0 WHERE code=?', (room['code'],))
+        assert client.post(f'/api/rooms/{room["code"]}/join').status_code == 404
+
+
+def test_concurrent_creation_retries_return_one_room():
+    from concurrent.futures import ThreadPoolExecutor
+    from app import connect_db
+    import secrets
+    payload = {'name': 'Retry test', 'request_id': secrets.token_hex(24)}
+    with TestClient(app) as client:
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            results = list(pool.map(lambda _: client.post('/api/rooms', json=payload), range(8)))
+        assert all(result.status_code == 200 for result in results)
+        assert len({result.json()['code'] for result in results}) == 1
+        assert len({result.json()['key'] for result in results}) == 1
+        with connect_db() as db:
+            assert db.execute('SELECT COUNT(*) FROM rooms WHERE request_id=?', (payload['request_id'],)).fetchone()[0] == 1
+        assert client.post('/api/rooms', json={**payload, 'name': 'Different'}).status_code == 409
+        assert client.post('/api/rooms', json={'request_id': 'bad'}).status_code == 422
